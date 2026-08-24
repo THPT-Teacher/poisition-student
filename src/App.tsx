@@ -21,6 +21,10 @@ export function App() {
     nextStudent,
     resetAssignments,
     clearAndSetupNew,
+    toggleSeatDisabled,
+    toggleDeskDisabled,
+    disableExtraSeatsFromBack,
+    enableAllDisabledSeats,
   } = useClassroom();
 
   if (isLoading) {
@@ -53,6 +57,10 @@ export function App() {
       onNextStudent={nextStudent}
       onReset={resetAssignments}
       onNewSetup={clearAndSetupNew}
+      onToggleSeatDisabled={toggleSeatDisabled}
+      onToggleDeskDisabled={toggleDeskDisabled}
+      onDisableExtraSeats={disableExtraSeatsFromBack}
+      onEnableAllSeats={enableAllDisabledSeats}
     />
   );
 }

@@ -1,24 +1,31 @@
 import React, { useState } from 'react';
-import { Volume2, VolumeX, RefreshCw, Settings, Sparkles, AlertCircle } from 'lucide-react';
+import { Volume2, VolumeX, RefreshCw, Settings, Sparkles, AlertCircle, Ban, Check } from 'lucide-react';
 import type { Classroom } from '../types/classroom';
 import { MASCOTS } from '../types/classroom';
+import { countEnabledSeats } from '../lib/random';
 
 interface ClassroomHeaderProps {
   classroom: Classroom;
   soundEnabled: boolean;
+  isEditingSeats?: boolean;
+  canEditSeats?: boolean;
   onToggleSound: () => void;
   onChangeMascot: (emoji: string) => void;
   onReset: () => void;
   onNewSetup: () => void;
+  onToggleEditSeats?: () => void;
 }
 
 export const ClassroomHeader: React.FC<ClassroomHeaderProps> = ({
   classroom,
   soundEnabled,
+  isEditingSeats = false,
+  canEditSeats = false,
   onToggleSound,
   onChangeMascot,
   onReset,
   onNewSetup,
+  onToggleEditSeats,
 }) => {
   const [showMascotPicker, setShowMascotPicker] = useState(false);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
@@ -27,6 +34,8 @@ export const ClassroomHeader: React.FC<ClassroomHeaderProps> = ({
   const assignedCount = classroom.students.filter(s => s.assignedSeatId).length;
   const totalCount = classroom.students.length;
   const progressPercent = totalCount > 0 ? Math.round((assignedCount / totalCount) * 100) : 0;
+  const enabledSeats = countEnabledSeats(classroom.seats);
+  const unusedSeats = Math.max(0, enabledSeats - totalCount);
 
   return (
     <header className="w-full bg-slate-800/80 backdrop-blur-md border-b border-slate-700/60 sticky top-0 z-30 px-4 py-3 shadow-lg">
@@ -42,7 +51,7 @@ export const ClassroomHeader: React.FC<ClassroomHeaderProps> = ({
                 {classroom.name}
               </h1>
               <span className="bg-purple-950/80 text-purple-300 text-xs px-2.5 py-0.5 rounded-full font-bold border border-purple-700/50">
-                {classroom.numGroups} Tổ × {classroom.desksPerGroup} Bàn Đôi ({classroom.seats.length} Chỗ)
+                {classroom.numGroups} Tổ × {classroom.desksPerGroup} Bàn · {enabledSeats}/{classroom.seats.length} chỗ
               </span>
             </div>
             <p className="text-xs text-slate-400 font-medium">Bốc thăm chỗ ngồi lớp học ngẫu nhiên</p>
@@ -70,6 +79,26 @@ export const ClassroomHeader: React.FC<ClassroomHeaderProps> = ({
 
         {/* Nút Điều Khiển & Công Cụ */}
         <div className="flex items-center gap-2">
+          {canEditSeats && onToggleEditSeats && (
+            <button
+              onClick={onToggleEditSeats}
+              title={isEditingSeats ? 'Xong chỉnh bàn' : 'Tắt những chỗ không dùng (lớp lẻ / bàn dư)'}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition hover:scale-105 active:scale-95 border ${
+                isEditingSeats
+                  ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300'
+                  : unusedSeats > 0
+                  ? 'bg-rose-500/20 hover:bg-rose-500/30 border-rose-400/50 text-rose-200 ring-1 ring-rose-400/30'
+                  : 'bg-slate-700/80 hover:bg-slate-600 border-slate-600/60 text-slate-200'
+              }`}
+            >
+              {isEditingSeats ? <Check className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+              <span className="hidden md:inline">{isEditingSeats ? 'Xong chỉnh bàn' : 'Tắt chỗ thừa'}</span>
+              {!isEditingSeats && unusedSeats > 0 && (
+                <span className="bg-rose-500 text-white text-[10px] px-1.5 rounded-full">{unusedSeats}</span>
+              )}
+            </button>
+          )}
+
           {/* Nút đổi linh vật */}
           <div className="relative">
             <button

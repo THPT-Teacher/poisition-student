@@ -15,6 +15,8 @@ export interface Seat {
   seatInDesk: 1 | 2;  // 1: Ghế trái (hoặc trong), 2: Ghế phải (hoặc ngoài)
   deskNumber: number; // Bàn số mấy trong tổ
   studentId: string | null;
+  /** Giáo viên tắt chỗ này (lớp lẻ / bàn dư) — không đưa vào bốc thăm */
+  disabled?: boolean;
 }
 
 export type DoorPosition = 'front-left' | 'front-right' | 'back-left' | 'back-right';

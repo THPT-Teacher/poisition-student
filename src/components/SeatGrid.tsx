@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DoorOpen } from 'lucide-react';
+import { Ban, DoorOpen } from 'lucide-react';
 import type { Seat, Student, DoorPosition } from '../types/classroom';
 
 interface SeatGridProps {
@@ -12,6 +12,9 @@ interface SeatGridProps {
   mascot: string;
   currentHopSeatId: string | null;
   highlightWinnerSeatId: string | null;
+  isEditingSeats?: boolean;
+  onToggleSeat?: (seatId: string) => boolean;
+  onToggleDesk?: (groupIndex: number, deskNumber: number) => boolean;
 }
 
 export const SeatGrid: React.FC<SeatGridProps> = ({
@@ -23,6 +26,9 @@ export const SeatGrid: React.FC<SeatGridProps> = ({
   mascot,
   currentHopSeatId,
   highlightWinnerSeatId,
+  isEditingSeats = false,
+  onToggleSeat,
+  onToggleDesk,
 }) => {
   const studentMap = useMemo(() => {
     const map = new Map<string, Student>();
@@ -111,7 +117,9 @@ export const SeatGrid: React.FC<SeatGridProps> = ({
                   <span className="font-black text-xs sm:text-sm text-purple-200 tracking-wider">
                     🏛️ {group.groupName}
                   </span>
-                  <div className="text-[10px] text-slate-400">({desksPerGroup} bàn đôi - {desksPerGroup * 2} chỗ)</div>
+                  <div className="text-[10px] text-slate-400">
+                    {group.desks.length} bàn · {group.desks.flatMap(d => d.seats).filter(s => !s.disabled).length} chỗ dùng
+                  </div>
                 </div>
 
                 {/* Các Bàn Đôi Trong Tổ (Xếp dọc xuống) */}
@@ -119,12 +127,26 @@ export const SeatGrid: React.FC<SeatGridProps> = ({
                   {group.desks.map(desk => (
                     <div
                       key={desk.deskNumber}
-                      className="p-1.5 bg-slate-950/80 rounded-2xl border border-slate-800/80 shadow-inner relative group hover:border-slate-700 transition"
+                      className={`p-1.5 rounded-2xl border shadow-inner relative group transition ${
+                        desk.seats.every(s => s.disabled)
+                          ? 'bg-slate-950/40 border-dashed border-slate-700/50 opacity-70'
+                          : 'bg-slate-950/80 border-slate-800/80 hover:border-slate-700'
+                      }`}
                     >
-                      {/* Nhãn Bàn số mấy */}
-                      <span className="text-[9px] font-bold text-slate-400 absolute -top-2 left-2.5 bg-slate-900 px-1.5 py-0.2 rounded border border-slate-700">
+                      {/* Nhãn Bàn số mấy — bấm để tắt/bật cả bàn khi đang chỉnh */}
+                      <button
+                        type="button"
+                        disabled={!isEditingSeats}
+                        onClick={() => onToggleDesk?.(group.groupIndex, desk.deskNumber)}
+                        title={isEditingSeats ? 'Bấm để tắt/bật cả bàn này' : undefined}
+                        className={`text-[9px] font-bold absolute -top-2 left-2.5 px-1.5 py-0.2 rounded border ${
+                          isEditingSeats
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 hover:bg-amber-500/30 cursor-pointer'
+                            : 'bg-slate-900 text-slate-400 border-slate-700 cursor-default'
+                        }`}
+                      >
                         Bàn {desk.deskNumber}
-                      </span>
+                      </button>
 
                       {/* 2 Chỗ Ngồi Ghép Đôi Cạnh Nhau */}
                       <div className="grid grid-cols-2 gap-1.5 pt-1">
@@ -132,10 +154,23 @@ export const SeatGrid: React.FC<SeatGridProps> = ({
                           const occupiedStudent = seat.studentId ? studentMap.get(seat.studentId) : null;
                           const isHoppingHere = currentHopSeatId === seat.id;
                           const isWinner = highlightWinnerSeatId === seat.id;
+                          const isDisabled = Boolean(seat.disabled);
+                          const canToggle = isEditingSeats && !occupiedStudent;
 
                           return (
                             <motion.div
                               key={seat.id}
+                              role={canToggle ? 'button' : undefined}
+                              tabIndex={canToggle ? 0 : undefined}
+                              onClick={() => {
+                                if (canToggle) onToggleSeat?.(seat.id);
+                              }}
+                              onKeyDown={e => {
+                                if (canToggle && (e.key === 'Enter' || e.key === ' ')) {
+                                  e.preventDefault();
+                                  onToggleSeat?.(seat.id);
+                                }
+                              }}
                               animate={{
                                 scale: isWinner ? [1, 1.15, 1.05] : isHoppingHere ? [1, 1.12, 1] : 1,
                               }}
@@ -147,7 +182,9 @@ export const SeatGrid: React.FC<SeatGridProps> = ({
                                   ? 'bg-gradient-to-br from-purple-600 to-pink-600 border-purple-300 shadow-[0_0_25px_rgba(236,72,153,0.8)] z-10 scale-105'
                                   : occupiedStudent
                                   ? 'bg-slate-800/95 border-purple-500/60 shadow-sm text-slate-100'
-                                  : 'bg-slate-800/40 hover:bg-slate-800/70 border-slate-700/60 text-slate-400'
+                                  : isDisabled
+                                  ? `bg-slate-950/70 border-dashed border-rose-500/40 text-slate-500 ${canToggle ? 'cursor-pointer hover:border-emerald-400/60 hover:bg-slate-900' : ''}`
+                                  : `bg-slate-800/40 border-slate-700/60 text-slate-400 ${canToggle ? 'cursor-pointer hover:bg-rose-950/40 hover:border-rose-400/50' : 'hover:bg-slate-800/70'}`
                               }`}
                             >
                               {/* Số ghế */}
@@ -157,6 +194,8 @@ export const SeatGrid: React.FC<SeatGridProps> = ({
                                     ? 'text-white'
                                     : occupiedStudent
                                     ? 'text-purple-300 font-bold'
+                                    : isDisabled
+                                    ? 'text-slate-600 line-through'
                                     : 'text-slate-400'
                                 }`}
                               >
@@ -183,8 +222,15 @@ export const SeatGrid: React.FC<SeatGridProps> = ({
                                   </div>
                                 ) : isHoppingHere ? (
                                   <span className="text-xl sm:text-2xl animate-bounce">{mascot}</span>
+                                ) : isDisabled ? (
+                                  <div className="flex flex-col items-center gap-0.5">
+                                    <Ban className="w-4 h-4 text-rose-400/80" />
+                                    <span className="text-[9px] font-black text-rose-300/80 uppercase">Tắt</span>
+                                  </div>
                                 ) : (
-                                  <span className="text-[10px] font-bold text-slate-400 opacity-80">Trống</span>
+                                  <span className="text-[10px] font-bold text-slate-400 opacity-80">
+                                    {canToggle ? 'Bấm tắt' : 'Trống'}
+                                  </span>
                                 )}
                               </div>
 

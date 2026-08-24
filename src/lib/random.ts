@@ -1,5 +1,17 @@
 import type { Student, Seat } from '../types/classroom';
 
+export function isSeatInLottery(seat: Seat): boolean {
+  return !seat.disabled && !seat.studentId;
+}
+
+export function getLotterySeats(seats: Seat[]): Seat[] {
+  return seats.filter(isSeatInLottery);
+}
+
+export function countEnabledSeats(seats: Seat[]): number {
+  return seats.filter(s => !s.disabled).length;
+}
+
 /**
  * Chọn ngẫu nhiên 1 học sinh chưa có chỗ ngồi
  */
@@ -11,10 +23,10 @@ export function pickRandomAvailableStudent(students: Student[]): Student | null 
 }
 
 /**
- * Chọn ngẫu nhiên 1 bàn chưa có người ngồi
+ * Chọn ngẫu nhiên 1 chỗ đang mở và chưa có người ngồi
  */
 export function pickRandomAvailableSeat(seats: Seat[]): Seat | null {
-  const available = seats.filter(s => !s.studentId);
+  const available = getLotterySeats(seats);
   if (available.length === 0) return null;
   const index = Math.floor(Math.random() * available.length);
   return available[index];

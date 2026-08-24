@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Classroom, Student, Seat, GamePhase, DoorPosition } from '../types/classroom';
-import { pickRandomAvailableStudent, pickRandomAvailableSeat, generateHopSequence } from '../lib/random';
+import { pickRandomAvailableStudent, pickRandomAvailableSeat, generateHopSequence, getLotterySeats } from '../lib/random';
 import { saveClassroomData, loadSavedClassroom, clearSavedClassroom } from '../lib/supabase';
 import { sounds } from '../lib/audio';
 import { triggerWinnerConfetti, triggerGrandCelebration } from '../lib/confetti';
@@ -32,6 +32,10 @@ export function useClassroom() {
           numGroups,
           desksPerGroup,
           doorPosition,
+          seats: (saved.seats || []).map(seat => ({
+            ...seat,
+            disabled: seat.disabled ?? false,
+          })),
         };
 
         setClassroom(normalizedClass);
@@ -105,6 +109,7 @@ export function useClassroom() {
             seatInDesk: s as 1 | 2,
             deskNumber: d,
             studentId: null,
+            disabled: false,
           });
         }
       }
@@ -158,7 +163,7 @@ export function useClassroom() {
   const rollDiceForSeat = useCallback(() => {
     if (!classroom || !selectedStudent) return;
 
-    const availableSeats = classroom.seats.filter(s => !s.studentId);
+    const availableSeats = getLotterySeats(classroom.seats);
     if (availableSeats.length === 0) return;
 
     const winnerSeat = pickRandomAvailableSeat(classroom.seats);
@@ -236,7 +241,7 @@ export function useClassroom() {
   const resetAssignments = useCallback(() => {
     if (!classroom) return;
     const resetStudents = classroom.students.map(s => ({ ...s, assignedSeatId: null }));
-    const resetSeats = classroom.seats.map(st => ({ ...st, studentId: null }));
+    const resetSeats = classroom.seats.map(st => ({ ...st, studentId: null })); // giữ nguyên chỗ đã tắt
 
     const updated: Classroom = {
       ...classroom,
@@ -252,6 +257,108 @@ export function useClassroom() {
     setGamePhase('idle');
     saveClassroomData(updated);
   }, [classroom]);
+
+  const unassignedCount = (c: Classroom) => c.students.filter(s => !s.assignedSeatId).length;
+  const lotteryCount = (seats: Seat[]) => getLotterySeats(seats).length;
+
+  const persistClassroom = useCallback((updated: Classroom) => {
+    setClassroom(updated);
+    saveClassroomData(updated);
+  }, []);
+
+  /** Bật/tắt 1 ghế. Không tắt nếu còn lại không đủ chỗ cho học sinh chưa nhận. */
+  const toggleSeatDisabled = useCallback((seatId: string): boolean => {
+    if (!classroom) return false;
+    const seat = classroom.seats.find(s => s.id === seatId);
+    if (!seat || seat.studentId) return false;
+
+    if (!seat.disabled && lotteryCount(classroom.seats) - 1 < unassignedCount(classroom)) {
+      return false;
+    }
+
+    persistClassroom({
+      ...classroom,
+      seats: classroom.seats.map(s =>
+        s.id === seatId ? { ...s, disabled: !s.disabled } : s
+      ),
+    });
+    return true;
+  }, [classroom, persistClassroom]);
+
+  /** Bấm nhãn bàn: tắt cả 2 ghế (nếu đủ chỗ) hoặc bật lại cả bàn. */
+  const toggleDeskDisabled = useCallback((groupIndex: number, deskNumber: number): boolean => {
+    if (!classroom) return false;
+    const deskSeats = classroom.seats.filter(
+      s => s.groupIndex === groupIndex && s.deskNumber === deskNumber && !s.studentId
+    );
+    if (deskSeats.length === 0) return false;
+
+    const allDisabled = deskSeats.every(s => s.disabled);
+    if (allDisabled) {
+      persistClassroom({
+        ...classroom,
+        seats: classroom.seats.map(s =>
+          s.groupIndex === groupIndex && s.deskNumber === deskNumber && !s.studentId
+            ? { ...s, disabled: false }
+            : s
+        ),
+      });
+      return true;
+    }
+
+    const extra = lotteryCount(classroom.seats) - unassignedCount(classroom);
+    const idsToDisable = new Set(
+      [...deskSeats]
+        .filter(s => !s.disabled)
+        .sort((a, b) => b.seatInDesk - a.seatInDesk)
+        .slice(0, extra)
+        .map(s => s.id)
+    );
+    if (idsToDisable.size === 0) return false;
+
+    persistClassroom({
+      ...classroom,
+      seats: classroom.seats.map(s =>
+        idsToDisable.has(s.id) ? { ...s, disabled: true } : s
+      ),
+    });
+    return true;
+  }, [classroom, persistClassroom]);
+
+  /** Tắt đúng số chỗ thừa, ưu tiên bàn cuối lớp (tổ phải, bàn xa bảng, ghế phải). */
+  const disableExtraSeatsFromBack = useCallback((): number => {
+    if (!classroom) return 0;
+    const extra = lotteryCount(classroom.seats) - unassignedCount(classroom);
+    if (extra <= 0) return 0;
+
+    const idsToDisable = new Set(
+      getLotterySeats(classroom.seats)
+        .slice()
+        .sort((a, b) => {
+          if (a.groupIndex !== b.groupIndex) return b.groupIndex - a.groupIndex;
+          if (a.deskNumber !== b.deskNumber) return b.deskNumber - a.deskNumber;
+          return b.seatInDesk - a.seatInDesk;
+        })
+        .slice(0, extra)
+        .map(s => s.id)
+    );
+
+    persistClassroom({
+      ...classroom,
+      seats: classroom.seats.map(s =>
+        idsToDisable.has(s.id) ? { ...s, disabled: true } : s
+      ),
+    });
+    return idsToDisable.size;
+  }, [classroom, persistClassroom]);
+
+  const enableAllDisabledSeats = useCallback(() => {
+    if (!classroom) return;
+    persistClassroom({
+      ...classroom,
+      seats: classroom.seats.map(s => ({ ...s, disabled: false })),
+    });
+  }, [classroom, persistClassroom]);
 
   // Về màn hình Setup tạo mới
   const clearAndSetupNew = useCallback(() => {
@@ -282,5 +389,9 @@ export function useClassroom() {
     nextStudent,
     resetAssignments,
     clearAndSetupNew,
+    toggleSeatDisabled,
+    toggleDeskDisabled,
+    disableExtraSeatsFromBack,
+    enableAllDisabledSeats,
   };
 }

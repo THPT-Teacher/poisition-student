@@ -1,12 +1,14 @@
 import React from 'react';
 import { Users, CheckCircle2, CircleDashed, Sparkles } from 'lucide-react';
 import type { Student, Seat } from '../types/classroom';
+import { countEnabledSeats } from '../lib/random';
 
 interface StudentListPanelProps {
   students: Student[];
   seats: Seat[];
   onStartRandomStudent: () => void;
   isGameActive: boolean;
+  isEditingSeats?: boolean;
 }
 
 export const StudentListPanel: React.FC<StudentListPanelProps> = ({
@@ -14,6 +16,7 @@ export const StudentListPanel: React.FC<StudentListPanelProps> = ({
   seats,
   onStartRandomStudent,
   isGameActive,
+  isEditingSeats = false,
 }) => {
   const seatMap = React.useMemo(() => {
     const map = new Map<string, Seat>();
@@ -23,6 +26,8 @@ export const StudentListPanel: React.FC<StudentListPanelProps> = ({
 
   const assignedStudents = students.filter(s => s.assignedSeatId);
   const unassignedStudents = students.filter(s => !s.assignedSeatId);
+  const enabledSeats = countEnabledSeats(seats);
+  const lotteryLocked = unassignedStudents.length === 0 || isGameActive || isEditingSeats;
 
   return (
     <aside className="w-full lg:w-80 bg-slate-800/80 backdrop-blur-md rounded-3xl border border-slate-700/60 p-4 flex flex-col shadow-xl h-full max-h-[85vh]">
@@ -30,10 +35,12 @@ export const StudentListPanel: React.FC<StudentListPanelProps> = ({
       <div className="mb-4">
         <button
           onClick={onStartRandomStudent}
-          disabled={unassignedStudents.length === 0 || isGameActive}
+          disabled={lotteryLocked}
           className={`w-full py-4 px-4 rounded-2xl font-black text-base md:text-lg flex items-center justify-center gap-2.5 shadow-xl transition-all ${
             unassignedStudents.length === 0
               ? 'bg-slate-700 text-slate-400 cursor-not-allowed border border-slate-600'
+              : isEditingSeats
+              ? 'bg-amber-900/40 text-amber-200 border border-amber-600/40 cursor-not-allowed'
               : isGameActive
               ? 'bg-purple-900/60 text-purple-300 border border-purple-700 cursor-wait'
               : 'bg-gradient-to-r from-purple-500 via-pink-500 to-amber-500 hover:from-purple-600 hover:via-pink-600 hover:to-amber-600 text-white shadow-purple-500/25 hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] ring-2 ring-purple-400/30'
@@ -43,11 +50,25 @@ export const StudentListPanel: React.FC<StudentListPanelProps> = ({
           <span className="tracking-wide uppercase drop-shadow-sm">
             {unassignedStudents.length === 0
               ? 'ĐÃ CHIA HẾT CHỖ 🎉'
+              : isEditingSeats
+              ? 'XONG CHỈNH BÀN ĐÃ'
               : isGameActive
               ? 'ĐANG CHIA CHỖ...'
               : 'CHỌN HỌC SINH'}
           </span>
         </button>
+        <p className="mt-2 text-[11px] text-center text-slate-400 font-medium">
+          Chỗ đang dùng: <strong className="text-emerald-400">{enabledSeats}</strong>
+          {' / '}
+          {seats.length} ghế
+          {enabledSeats > students.length ? (
+            <span className="text-amber-400"> · thừa {enabledSeats - students.length}</span>
+          ) : enabledSeats < students.length ? (
+            <span className="text-rose-400"> · thiếu {students.length - enabledSeats}</span>
+          ) : (
+            <span className="text-emerald-400"> · khớp sĩ số</span>
+          )}
+        </p>
       </div>
 
       {/* Tiêu đề & Bộ lọc trạng thái */}

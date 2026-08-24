@@ -295,6 +295,13 @@ export const SetupPage: React.FC<SetupPageProps> = ({ onStart }) => {
                   <span>Số học sinh ({parsedStudents.length}) nhiều hơn số chỗ ({totalSeats}). Hãy tăng số tổ hoặc số bàn!</span>
                 </div>
               )}
+
+              {!isNotEnoughSeats && totalSeats > parsedStudents.length && (
+                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs font-medium">
+                  Lớp còn <strong>{totalSeats - parsedStudents.length} chỗ thừa</strong>
+                  {parsedStudents.length % 2 === 1 ? ' (sĩ số lẻ)' : ''}. Sau khi vào lớp, bấm <strong>Tắt chỗ thừa</strong> để loại ghế không dùng trước khi chia.
+                </div>
+              )}
             </div>
 
             {/* Nút Bắt Đầu Lớp Học */}
